@@ -1,0 +1,17 @@
+extends layout
+
+block content
+    .container.row
+      .jumbotron.col-sm-4.pull-center
+        form(action='/signup', method='post')
+          div
+            label UserId:
+            input(type='text', name='userId')
+          div
+            label Name:
+            input(type='text', name='name')
+          div
+            label Password:
+            input(type='password', name='password')
+          div
+            input.btn.btn-primary(type='submit', value='Sign Up')
