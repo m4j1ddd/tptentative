@@ -1,0 +1,12 @@
+extends layout
+
+block content
+  form.form-signin(method='post')
+    h1.h3.mb-3.font-weight-normal Please sign in
+    p.text-danger= error
+    label.sr-only(for='inputUserId') User Id
+    input#inputUserId.form-control(type='text', placeholder='User Id', required='', autofocus='', name='userId')
+    label.sr-only(for='inputPassword') Password
+    input#inputPassword.form-control(type='password', placeholder='Password', required='', name='password')
+    button.btn.btn-lg.btn-primary.btn-block(type='submit') Sign in
+    p.mt-5.mb-3.text-muted © 2017-2019

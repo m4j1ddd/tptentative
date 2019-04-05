@@ -1,41 +1,138 @@
-var createError = require('http-errors');
 var express = require('express');
-var path = require('path');
+var bodyParser = require('body-parser');
 var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+var session = require('express-session');
+var morgan = require('morgan');
+var User = require('./models/user');
+var path = require('path');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-
+// invoke an instance of express application.
 var app = express();
+
+// set our application port
+app.set('port', 9000);
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
 
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.static('public'));
+
+// set morgan to log info about our requests for development use.
+app.use(morgan('dev'));
+
+// initialize body-parser to parse incoming parameters requests to req.body
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// initialize cookie-parser to allow us access the cookies stored in the browser.
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+// initialize express-session to allow us track the logged-in user across sessions.
+app.use(session({
+    key: 'user_sid',
+    secret: 'somerandonstuffs',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        expires: 600000
+    }
+}));
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+
+// This middleware will check if user's cookie is still saved in browser and user is not set, then automatically log the user out.
+// This usually happens when you stop your express server after login, your cookie still remains saved in the browser.
+app.use((req, res, next) => {
+    if (req.cookies.user_sid && !req.session.user) {
+        res.clearCookie('user_sid');
+    }
+    next();
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+// middleware function to check for logged-in users
+var sessionChecker = (req, res, next) => {
+    if (req.session.user && req.cookies.user_sid) {
+        res.redirect('/dashboard');
+    } else {
+        next();
+    }
+};
+
+var title = 'TrustPly Tentative Project';
+
+// route for Home-Page
+app.get('/', sessionChecker, (req, res) => {
+    res.redirect('/login');
 });
 
-module.exports = app;
+// route for user signup
+app.route('/signup')
+    .get(sessionChecker, (req, res) => {
+        res.render('signup', {title: title + ' SignUp'});
+    })
+    .post((req, res) => {
+        User.create({
+            userId: req.body.userId,
+            name: req.body.name,
+            password: req.body.password
+        })
+            .then(user => {
+                req.session.user = user.dataValues;
+                res.redirect('/dashboard');
+            })
+            .catch(error => {
+                res.redirect('/signup');
+            });
+    });
+
+
+// route for user Login
+app.route('/login')
+    .get(sessionChecker, (req, res) => {
+        res.render('login', {title: title + ' Login'});
+    })
+    .post((req, res) => {
+        var userId = req.body.userId,
+            password = req.body.password;
+
+        User.findOne({ where: { userId: userId } }).then(function (user) {
+            if (!user) {
+                res.redirect('/login');
+            } else if (!user.validPassword(password)) {
+                res.redirect('/login');
+            } else {
+                req.session.user = user.dataValues;
+                res.redirect('/dashboard');
+            }
+        });
+    });
+
+
+// route for user's dashboard
+app.get('/dashboard', (req, res) => {
+    if (req.session.user && req.cookies.user_sid) {
+        res.render('dashboard', {title: title + ' Dashboard'});
+    } else {
+        res.redirect('/login');
+    }
+});
+
+
+// route for user logout
+app.get('/logout', (req, res) => {
+    if (req.session.user && req.cookies.user_sid) {
+        res.clearCookie('user_sid');
+        res.redirect('/');
+    } else {
+        res.redirect('/login');
+    }
+});
+
+// route for handling 404 requests(unavailable routes)
+app.use(function (req, res, next) {
+    res.status(404).send("Sorry can't find that!")
+});
+
+
+// start the express server
+app.listen(app.get('port'), () => console.log(`App started on port ${app.get('port')}`));
